@@ -27,9 +27,14 @@ const App: React.FC = () => {
 
   const fetchExplanation = useCallback(async (molecule: Molecule) => {
     setIsLoadingAi(true);
-    const explanation = await askGeminiAboutMolecule(molecule.name, molecule.formula);
-    setAiExplanation(explanation);
-    setIsLoadingAi(false);
+    try {
+      const explanation = await askGeminiAboutMolecule(molecule.name, molecule.formula);
+      setAiExplanation(explanation);
+    } catch (err) {
+      setAiExplanation("解説の取得に失敗しました。");
+    } finally {
+      setIsLoadingAi(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -43,24 +48,29 @@ const App: React.FC = () => {
 
   const handleAskQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userQuestion.trim()) return;
+    if (!userQuestion.trim() || isLoadingAi) return;
 
     const question = userQuestion;
     setUserQuestion('');
     setChatHistory(prev => [...prev, { role: 'user', text: question }]);
     
     setIsLoadingAi(true);
-    const answer = await askGeminiAboutMolecule(selectedMolecule.name, selectedMolecule.formula, question);
-    setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
-    setIsLoadingAi(false);
+    try {
+      const answer = await askGeminiAboutMolecule(selectedMolecule.name, selectedMolecule.formula, question);
+      setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
+    } catch (err) {
+      setChatHistory(prev => [...prev, { role: 'ai', text: "エラーが発生しました。" }]);
+    } finally {
+      setIsLoadingAi(false);
+    }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       {/* Header */}
-      <header className="h-16 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 z-10">
+      <header className="h-16 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 z-30">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-600 rounded-lg">
+          <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-900/20">
             <AtomIcon className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
@@ -71,8 +81,8 @@ const App: React.FC = () => {
         <div className="flex items-center gap-4">
           <button 
             onClick={() => setAutoRotate(!autoRotate)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              autoRotate ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all transform active:scale-95 ${
+              autoRotate ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-800 text-slate-400'
             }`}
           >
             <RotateCw className={`w-4 h-4 ${autoRotate ? 'animate-spin-slow' : ''}`} />
@@ -85,83 +95,86 @@ const App: React.FC = () => {
         {/* Sidebar Toggle */}
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-slate-800 p-1 rounded-r-lg border border-l-0 border-slate-700 text-slate-400 hover:text-white transition-all"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-40 bg-slate-800 p-2 rounded-r-xl border border-l-0 border-slate-700 text-slate-400 hover:text-white transition-all shadow-xl"
+          aria-label="Toggle Sidebar"
         >
           {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
         </button>
 
         {/* Sidebar */}
         <aside className={`${
-          isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden'
-        } bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col z-10`}>
+          isSidebarOpen ? 'w-80 opacity-100' : 'w-0 opacity-0 overflow-hidden'
+        } bg-slate-900/50 backdrop-blur-xl border-r border-slate-800 transition-all duration-300 flex flex-col z-20`}>
           <div className="p-4 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">分子ライブラリ</h2>
-            <div className="grid grid-cols-1 gap-2">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 px-2">分子ライブラリ</h2>
+            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar px-1">
               {MOLECULES.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => handleMoleculeSelect(m)}
-                  className={`flex items-center justify-between p-3 rounded-xl text-left transition-all ${
+                  className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all ${
                     selectedMolecule.id === m.id 
-                      ? 'bg-blue-600/20 border-blue-500 text-blue-400 border' 
-                      : 'hover:bg-slate-800 text-slate-400 border border-transparent'
+                      ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 border ring-1 ring-blue-500/20' 
+                      : 'hover:bg-slate-800/50 text-slate-400 border border-transparent'
                   }`}
                 >
                   <div>
                     <div className="font-bold text-slate-100">{m.name}</div>
-                    <div className="text-xs opacity-70 font-mono">{m.formula}</div>
+                    <div className="text-[10px] opacity-70 font-mono tracking-tighter">{m.formula}</div>
                   </div>
-                  <Beaker size={18} className={selectedMolecule.id === m.id ? 'text-blue-400' : 'text-slate-600'} />
+                  <Beaker size={16} className={selectedMolecule.id === m.id ? 'text-blue-400' : 'text-slate-600'} />
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-2 text-blue-400">
-                <Info size={18} />
-                <h3 className="font-semibold">基本情報</h3>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-blue-400">
+                <Info size={16} className="shrink-0" />
+                <h3 className="text-sm font-bold uppercase tracking-wider">概要</h3>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed italic">
+              <p className="text-xs text-slate-400 leading-relaxed bg-slate-800/30 p-3 rounded-xl border border-slate-700/30">
                 {selectedMolecule.description}
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-indigo-400">
-                <MessageSquare size={18} />
-                <h3 className="font-semibold">Gemini AI 解説</h3>
+                <MessageSquare size={16} className="shrink-0" />
+                <h3 className="text-sm font-bold uppercase tracking-wider">Gemini AI 解説</h3>
               </div>
               
-              <div className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50 text-sm leading-relaxed relative min-h-[100px]">
+              <div className="p-4 bg-indigo-950/20 rounded-2xl border border-indigo-500/10 text-xs leading-relaxed min-h-[80px]">
                 {isLoadingAi && !aiExplanation ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-2">
-                    <Loader2 className="animate-spin text-blue-500" />
-                    <span className="text-xs text-slate-500">解析中...</span>
+                  <div className="flex flex-col items-center justify-center py-4 gap-2">
+                    <Loader2 className="animate-spin text-indigo-500 w-5 h-5" />
+                    <span className="text-[10px] text-indigo-400/60 font-medium">分子構造を解析中...</span>
                   </div>
                 ) : (
-                  <p className="text-slate-300">{aiExplanation}</p>
+                  <p className="text-slate-300 whitespace-pre-wrap">{aiExplanation}</p>
                 )}
               </div>
 
               {/* Chat History */}
-              {chatHistory.map((chat, idx) => (
-                <div key={idx} className={`flex flex-col ${chat.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[90%] p-3 rounded-2xl text-xs ${
-                    chat.role === 'user' 
-                      ? 'bg-blue-600 text-white rounded-tr-none' 
-                      : 'bg-slate-800 text-slate-300 border border-slate-700 rounded-tl-none'
-                  }`}>
-                    {chat.text}
+              <div className="space-y-3">
+                {chatHistory.map((chat, idx) => (
+                  <div key={idx} className={`flex flex-col ${chat.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[90%] p-3 rounded-2xl text-[11px] ${
+                      chat.role === 'user' 
+                        ? 'bg-blue-600 text-white rounded-tr-none shadow-lg shadow-blue-900/20' 
+                        : 'bg-slate-800 text-slate-300 border border-slate-700 rounded-tl-none shadow-md'
+                    }`}>
+                      {chat.text}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
               {isLoadingAi && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && (
-                <div className="flex items-center gap-2 text-xs text-slate-500 italic">
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 italic px-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Geminiが回答を作成しています...
+                  回答を生成しています...
                 </div>
               )}
             </div>
@@ -174,62 +187,63 @@ const App: React.FC = () => {
                 type="text"
                 value={userQuestion}
                 onChange={(e) => setUserQuestion(e.target.value)}
-                placeholder="この分子について質問..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-full py-2.5 pl-4 pr-12 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                placeholder="この分子の特性は？"
+                className="w-full bg-slate-800/80 border border-slate-700 rounded-full py-2.5 pl-4 pr-12 text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
               />
               <button
                 type="submit"
                 disabled={isLoadingAi || !userQuestion.trim()}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-blue-600 rounded-full disabled:opacity-50 transition-opacity"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-blue-600 text-white rounded-full disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors"
               >
-                <Send size={16} />
+                <Send size={14} />
               </button>
             </form>
           </div>
         </aside>
 
         {/* 3D Viewport */}
-        <section className="flex-1 flex flex-col relative">
+        <section className="flex-1 flex flex-col relative bg-[#0a0f1d]">
           <MoleculeCanvas molecule={selectedMolecule} autoRotate={autoRotate} />
           
           {/* Legend Overlay */}
-          <div className="absolute bottom-6 left-6 p-4 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-white/10 pointer-events-none">
-            <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase">元素カラー凡例</h4>
-            <div className="flex gap-4 flex-wrap max-w-xs">
-              {Array.from(new Set(selectedMolecule.atoms.map(a => a.element))).map(el => (
+          <div className="absolute bottom-6 left-6 p-4 bg-slate-900/70 backdrop-blur-md rounded-2xl border border-white/5 pointer-events-none shadow-2xl">
+            <h4 className="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-tighter">元素カラー凡例</h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {Array.from(new Set(selectedMolecule.atoms.map(a => a.element))).map((el: string) => (
                 <div key={el} className="flex items-center gap-2">
                   <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: CPK_COLORS[el] || '#dddddd' }} 
+                    className="w-2.5 h-2.5 rounded-full border border-white/10" 
+                    // Explicitly typing 'el' as string ensures it can be used as an index for CPK_COLORS
+                    style={{ backgroundColor: CPK_COLORS[el] || CPK_COLORS['DEFAULT'] }} 
                   />
-                  <span className="text-[10px] font-medium text-slate-300">{el}</span>
+                  <span className="text-[10px] font-bold text-slate-300">{el}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Interaction Guide */}
-          <div className="absolute top-6 right-6 p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 pointer-events-none text-[10px] text-slate-400 space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 bg-white/10 rounded">左ドラッグ</span>
-              <span>回転</span>
+          <div className="absolute top-6 right-6 p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 pointer-events-none text-[9px] text-slate-400 space-y-1.5 font-medium shadow-2xl">
+            <div className="flex items-center justify-between gap-4">
+              <span className="opacity-60 uppercase">左ドラッグ</span>
+              <span className="text-slate-200">回転</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 bg-white/10 rounded">右ドラッグ</span>
-              <span>移動</span>
+            <div className="flex items-center justify-between gap-4">
+              <span className="opacity-60 uppercase">右ドラッグ</span>
+              <span className="text-slate-200">移動</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 bg-white/10 rounded">スクロール</span>
-              <span>ズーム</span>
+            <div className="flex items-center justify-between gap-4">
+              <span className="opacity-60 uppercase">スクロール</span>
+              <span className="text-slate-200">ズーム</span>
             </div>
           </div>
 
           {/* Display Name Overlay */}
-          <div className="absolute top-8 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-            <h2 className="text-4xl font-black text-white/90 drop-shadow-2xl">
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 text-center pointer-events-none z-10">
+            <h2 className="text-5xl font-black text-white/95 drop-shadow-[0_0_25px_rgba(59,130,246,0.3)] tracking-tight">
               {selectedMolecule.name}
             </h2>
-            <p className="text-xl font-mono text-blue-400/80 tracking-widest mt-1">
+            <p className="text-xl font-mono text-blue-400/90 tracking-[0.3em] mt-2 font-bold">
               {selectedMolecule.formula}
             </p>
           </div>
@@ -238,10 +252,10 @@ const App: React.FC = () => {
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
-        .animate-spin-slow { animation: spin 8s linear infinite; }
+        .animate-spin-slow { animation: spin 12s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
